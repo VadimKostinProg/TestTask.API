@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using TestTask.Data;
 using TestTask.Data.Entities;
+using TestTask.Utils.DTO;
 
 namespace TestTask.Services;
 
@@ -11,6 +12,48 @@ public class MarketService
     public MarketService(TestDbContext testDbContext)
     {
         _testDbContext = testDbContext;
+    }
+
+    public async Task<List<PopularityReportLineDto>> GetMostPopularItemsReport()
+    {
+        var result = await _testDbContext.UserItems
+            .GroupBy(ui => new { ui.ItemId, Year = ui.PurchaseDate.Year, Day = ui.PurchaseDate.Date })
+            .Select(g => new
+            {
+                g.Key.Year,
+                g.Key.ItemId,
+                MaxDailyPurchase = g.Count()
+            })
+            .GroupBy(g => new { g.Year, g.ItemId })
+            .Select(g => new
+            {
+                g.Key.Year,
+                g.Key.ItemId,
+                MaxDailyPurchase = g.Max(x => x.MaxDailyPurchase)
+            })
+            .Join(_testDbContext.Items, g => g.ItemId, i => i.Id, (g, i) => new
+            {
+                g.Year,
+                ItemName = i.Name,
+                MaxDailyPurchase = g.MaxDailyPurchase
+            })
+            .GroupBy(x => x.Year)
+            .Select(g => new
+            {
+                Year = g.Key,
+                TopItems = g.OrderByDescending(x => x.MaxDailyPurchase).Take(3).ToList()
+            })
+            .OrderByDescending(g => g.Year)
+            .ToListAsync();
+
+        return result
+            .SelectMany(g => g.TopItems.Select(x => new PopularityReportLineDto
+            {
+                Year = x.Year,
+                ItemName = x.ItemName,
+                MaxDailyPurchase = x.MaxDailyPurchase
+            }))
+            .ToList();
     }
 
     public async Task BuyAsync(int userId, int itemId)
@@ -32,7 +75,8 @@ public class MarketService
         await _testDbContext.UserItems.AddAsync(new UserItem
         {
             UserId = userId,
-            ItemId = itemId
+            ItemId = itemId,
+            PurchaseDate = DateTime.UtcNow
         });
 
         await _testDbContext.SaveChangesAsync();

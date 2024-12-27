@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using TestTask.Services;
+using TestTask.Utils.DTO;
 
 namespace TestTask.API.Controllers;
 
@@ -12,6 +13,12 @@ public class MarketController : ControllerBase
     public MarketController(MarketService marketService)
     {
         _marketService = marketService;
+    }
+
+    [HttpGet("report")]
+    public async Task<ActionResult<List<PopularityReportLineDto>>> GetMostPopularItemsReport()
+    {
+        return Ok(await _marketService.GetMostPopularItemsReport());
     }
 
     [HttpPost]
